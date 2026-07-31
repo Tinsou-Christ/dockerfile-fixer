@@ -47,7 +47,13 @@ app.get("/api", (req, res) => {
   });
 });
 
-app.get("/api/health", (req, res) => res.json({ status: "ok", uptime: process.uptime() }));
+app.get("/api/health", (req, res) =>
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    storage: require("./src/mongo").isEnabled() ? "mongodb" : "file",
+  }),
+);
 
 app.get("/api/categories", (req, res) => {
   res.json(store.categories());
@@ -250,7 +256,14 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || "Internal server error" });
 });
 
-store.load();
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Quiz API listening on http://0.0.0.0:${PORT}`);
-});
+store
+  .init()
+  .then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Quiz API listening on http://0.0.0.0:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Startup failed:", err);
+    process.exit(1);
+  });
