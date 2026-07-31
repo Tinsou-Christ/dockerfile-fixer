@@ -30,6 +30,33 @@ module.exports = {
     }
   },
 
+  async safeStream(url) {
+    if (!url || !/^https?:\/\//i.test(url)) return null;
+    try {
+      const res = await axios.get(url, {
+        responseType: "stream",
+        timeout: 20000,
+        maxRedirects: 5,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+          Accept: "image/avif,image/webp,image/*,*/*;q=0.8",
+          Referer: "https://www.google.com/"
+        }
+      });
+      const ext = (url.split("?")[0].split(".").pop() || "jpg").slice(0, 4);
+      res.data.path = `quiz_${Date.now()}.${ext}`;
+      return res.data;
+    } catch (e) {
+      console.error("Image download failed:", url, e.message);
+      try {
+        return await global.utils.getStreamFromURL(url);
+      } catch (e2) {
+        return null;
+      }
+    }
+  },
+
   generateProgressBar(percentile) {
     const filled = Math.round(percentile / 10);
     const empty = 10 - filled;
@@ -390,14 +417,17 @@ module.exports = {
 
   async handleFlagQuiz(message, event, commandName, api) {
     try {
-      const res = await axios.get(`${BASE_URL}/question?category=flag&userId=${event.senderID}`);
+      const res = await axios.get(`${BASE_URL}/question?category=flag&userId=${event.senderID}`, { timeout: 25000 });
       const { _id, question, options, answer } = res.data;
+      if (!Array.isArray(options) || !options.length) {
+        return message.reply("⚠️ No flag question available right now. Try again later.");
+      }
 
       const flagEmbed = {
         body: `🏁 𝗙𝗹𝗮𝗴 𝗤𝘂𝗶𝘇\n━━━━━━━━\n\n🌍 Guess this country's flag:\n\n` +
               options.map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt}`).join("\n") +
               `\n\n⏰ Time: 30 seconds for answer.`,
-        attachment: question ? await global.utils.getStreamFromURL(question) : null
+        attachment: await this.safeStream(question)
       };
 
       const info = await message.reply(flagEmbed);
@@ -423,21 +453,25 @@ module.exports = {
         }
       }, 30000);
     } catch (err) {
-      console.error("Flag quiz error:", err);
-      return message.reply("⚠️ Could not create flag quiz.");
+      console.error("Flag quiz error:", err?.response?.data || err);
+      const detail = err?.response?.data?.error || err.message || "unknown error";
+      return message.reply(`⚠️ Could not create flag quiz.\n📄 Reason: ${detail}`);
     }
   },
 
   async handleAnimeQuiz(message, event, commandName, api) {
     try {
-      const res = await axios.get(`${BASE_URL}/question?category=anime&userId=${event.senderID}`);
-      const { _id, question, options, answer, imageUrl } = res.data;
+      const res = await axios.get(`${BASE_URL}/question?category=anime&userId=${event.senderID}`, { timeout: 25000 });
+      const { _id, question, options, answer, imageUrl, hint } = res.data;
+      if (!Array.isArray(options) || !options.length) {
+        return message.reply("⚠️ No anime question available right now. Try again later.");
+      }
 
       const animeEmbed = {
-        body: `🎌 𝗔𝗻𝗶𝗺𝗲 𝗤𝘂𝗶𝘇\n━━━━━━━━\n\n❔ 𝗛𝗶𝗻𝘁: ${question}\n\n` +
+        body: `🎌 𝗔𝗻𝗶𝗺𝗲 𝗤𝘂𝗶𝘇\n━━━━━━━━\n\n❔ 𝗛𝗶𝗻𝘁: ${hint || question}\n\n` +
               options.map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt}`).join("\n") +
               `\n\n⏰ Time: 30 seconds\n🎯 Anime Character Recognition Challenge!`,
-        attachment: imageUrl ? await global.utils.getStreamFromURL(imageUrl) : null
+        attachment: await this.safeStream(imageUrl || question)
       };
 
       const info = await message.reply(animeEmbed);
@@ -463,8 +497,9 @@ module.exports = {
         }
       }, 30000);
     } catch (err) {
-      console.error("Anime quiz error:", err);
-      return message.reply("⚠️ Could not create anime quiz. Make sure anime questions are available in the database.");
+      console.error("Anime quiz error:", err?.response?.data || err);
+      const detail = err?.response?.data?.error || err.message || "unknown error";
+      return message.reply(`⚠️ Could not create anime quiz.\n📄 Reason: ${detail}`);
     }
   },
 
