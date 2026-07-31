@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { seedQuestions } = require("./seed");
+const { seedQuestions, SEED_VERSION } = require("./seed");
 const mongo = require("./mongo");
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "..", "data");
@@ -31,12 +31,22 @@ function load() {
     db = JSON.parse(JSON.stringify(DEFAULT_DB));
   }
 
-  if (!db.meta.seeded && db.questions.length === 0) {
-    db.questions = seedQuestions();
-    db.meta.seeded = true;
-    save(true);
-  }
+  if (syncSeed(db)) save(true);
   return db;
+}
+
+/**
+ * Keeps the built-in question pack in sync with seed.js.
+ * Questions created from the admin panel are never touched.
+ */
+function syncSeed(target) {
+  if (target.meta.seedVersion === SEED_VERSION && target.questions.length > 0) return false;
+  const custom = target.questions.filter((q) => !q.seed);
+  target.questions = [...seedQuestions(), ...custom];
+  target.meta.seeded = true;
+  target.meta.seedVersion = SEED_VERSION;
+  console.log(`[store] question pack synced (${SEED_VERSION}) — ${target.questions.length} questions`);
+  return true;
 }
 
 /**
@@ -54,6 +64,7 @@ async function init() {
       console.log(
         `[store] loaded from MongoDB: ${db.questions.length} questions, ${Object.keys(db.users).length} players`,
       );
+      if (syncSeed(db)) await mongo.saveState(db);
     } else {
       load(); // seeds if empty
       await mongo.saveState(db);
@@ -121,7 +132,7 @@ function normalizeQuestion(input, existing = null) {
 
   const category = String(input.category || "general").trim().toLowerCase();
   const isTorf = category === "torf";
-  const finalOptions = isTorf ? ["True", "False"] : options;
+  const finalOptions = isTorf ? ["Vrai", "Faux"] : options;
 
   if (!String(input.question || "").trim() && !input.imageUrl) {
     throw new Error("A question text (or an image) is required");
@@ -207,7 +218,11 @@ function publicQuestion(q) {
 
 function pickQuestion({ category, difficulty, userId }) {
   let pool = allQuestions();
-  if (category) pool = pool.filter((q) => q.category === String(category).toLowerCase());
+  const cat = category ? String(category).toLowerCase() : "";
+  // "general" = toutes les questions texte (culture, géographie, maths…)
+  const GENERAL = ["general", "culture", "geographie", "maths", "science", "histoire", "sport"];
+  if (cat === "general") pool = pool.filter((q) => GENERAL.includes(q.category));
+  else if (cat) pool = pool.filter((q) => q.category === cat);
   if (difficulty) pool = pool.filter((q) => q.difficulty === String(difficulty).toLowerCase());
   if (!pool.length) return null;
 
