@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quiz API — Admin panel</title>
+<meta name="description" content="Admin panel for the Quiz API: create questions with images, manage categories, players, bans, XP grants and leaderboards." />
+<meta name="robots" content="noindex" />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="logo">🔐</span> Quiz Admin</div>
+    <nav id="adminNav" class="hide">
+      <button data-view="dash" class="active">Dashboard</button>
+      <button data-view="new">➕ New question</button>
+      <button data-view="questions">Questions</button>
+      <button data-view="users">Players</button>
+      <a class="navlink" href="/">← Site</a>
+      <button id="logout">Log out</button>
+    </nav>
+  </header>
+
+  <!-- LOGIN -->
+  <section id="view-login">
+    <div class="card" style="max-width:420px;margin:0 auto">
+      <h1>Admin access</h1>
+      <p class="lead">Enter the admin code to manage questions and players.</p>
+      <label for="code">Admin code</label>
+      <input id="code" type="password" inputmode="numeric" placeholder="••••" autocomplete="off" />
+      <div class="row" style="margin-top:14px"><button class="btn" id="loginBtn">Unlock</button></div>
+      <p id="loginErr" class="muted"></p>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="view-dash" class="hide">
+    <div class="card">
+      <h2>📊 Overview</h2>
+      <div class="grid stats" id="statGrid"></div>
+    </div>
+    <div class="card grid two">
+      <div>
+        <h3>Questions per category</h3>
+        <div class="scroll"><table id="catTable"></table></div>
+      </div>
+      <div>
+        <h3>Top players</h3>
+        <div class="scroll"><table id="topTable"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- NEW / EDIT QUESTION -->
+  <section id="view-new" class="hide">
+    <div class="card">
+      <h2 id="formTitle">➕ Add a question</h2>
+      <p class="lead">For an anime quiz: pick the <b>anime</b> category, paste the character image URL, write the hint, the 4 options, then select the correct answer (e.g. B).</p>
+      <div class="grid two">
+        <div>
+          <label for="fCategory">Category</label>
+          <input id="fCategory" list="catList" placeholder="anime, flag, torf, general…" />
+          <datalist id="catList"></datalist>
+        </div>
+        <div>
+          <label for="fDifficulty">Difficulty</label>
+          <select id="fDifficulty">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+      </div>
+      <label for="fImage">Image URL (anime character, flag… optional)</label>
+      <input id="fImage" placeholder="https://…/character.jpg" />
+      <img id="fPreview" class="q-image hide" alt="Question image preview" />
+      <label for="fQuestion">Question / hint</label>
+      <textarea id="fQuestion" rows="2" placeholder="Who is this anime character?"></textarea>
+      <div id="optionFields"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn ghost small" id="addOption">+ Add option</button>
+        <span class="muted">Select the radio button of the correct answer.</span>
+      </div>
+      <div class="row" style="margin-top:18px">
+        <button class="btn accent" id="saveQuestion">💾 Save question</button>
+        <button class="btn ghost" id="resetForm">Reset</button>
+      </div>
+      <details style="margin-top:20px">
+        <summary class="muted">Bulk import (JSON array)</summary>
+        <textarea id="bulkJson" rows="6" style="margin-top:10px" placeholder='[{"category":"anime","difficulty":"medium","question":"Who is this?","options":["A","B","C","D"],"answerIndex":1,"imageUrl":"https://…"}]'></textarea>
+        <button class="btn small" id="bulkBtn" style="margin-top:10px">Import</button>
+      </details>
+    </div>
+  </section>
+
+  <!-- QUESTIONS -->
+  <section id="view-questions" class="hide">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">🗂️ Questions</h2>
+        <div class="row">
+          <select id="qFilter" style="width:auto"></select>
+          <input id="qSearch" placeholder="Search…" style="width:180px" />
+        </div>
+      </div>
+      <div class="grid two" id="qList" style="margin-top:16px"></div>
+    </div>
+  </section>
+
+  <!-- USERS -->
+  <section id="view-users" class="hide">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">👥 Players</h2>
+        <input id="uSearch" placeholder="Search player…" style="width:200px" />
+      </div>
+      <div class="scroll" style="margin-top:14px"><table id="userTable"></table></div>
+    </div>
+  </section>
+</div>
+<script src="/js/admin.js"></script>
+</body>
+</html>

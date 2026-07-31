@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: quiz-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: ADMIN_CODE
+        value: "0709"
+      - key: DATA_DIR
+        value: /data
+    disk:
+      name: quiz-data
+      mountPath: /data
+      sizeGB: 1
