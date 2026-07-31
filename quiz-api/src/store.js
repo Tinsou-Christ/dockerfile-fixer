@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { seedQuestions } = require("./seed");
+const mongo = require("./mongo");
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "..", "data");
 const DB_FILE = path.join(DATA_DIR, "db.json");
@@ -38,6 +39,32 @@ function load() {
   return db;
 }
 
+/**
+ * Connect to MongoDB (when MONGODB_URI is set) and use it as the source of
+ * truth. Must be awaited before the HTTP server starts serving traffic.
+ */
+async function init() {
+  await mongo.connect();
+
+  if (mongo.isEnabled()) {
+    const remote = await mongo.loadState();
+    if (remote) {
+      db = remote;
+      for (const k of Object.keys(DEFAULT_DB)) if (db[k] === undefined) db[k] = DEFAULT_DB[k];
+      console.log(
+        `[store] loaded from MongoDB: ${db.questions.length} questions, ${Object.keys(db.users).length} players`,
+      );
+    } else {
+      load(); // seeds if empty
+      await mongo.saveState(db);
+      console.log("[store] MongoDB was empty — initial state uploaded");
+    }
+    return db;
+  }
+
+  return load();
+}
+
 function save(immediate = false) {
   if (immediate) {
     writeNow();
@@ -51,6 +78,10 @@ function save(immediate = false) {
 }
 
 function writeNow() {
+  if (mongo.isEnabled()) {
+    mongo.saveState(db).catch((err) => console.error("[mongo] async save failed:", err.message));
+    return;
+  }
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const tmp = DB_FILE + ".tmp";
@@ -60,6 +91,7 @@ function writeNow() {
     console.error("DB save failed:", err.message);
   }
 }
+
 
 function newId() {
   return (
