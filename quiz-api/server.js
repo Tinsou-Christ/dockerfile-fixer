@@ -250,7 +250,14 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || "Internal server error" });
 });
 
-store.load();
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Quiz API listening on http://0.0.0.0:${PORT}`);
-});
+store
+  .init()
+  .then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Quiz API listening on http://0.0.0.0:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Startup failed:", err);
+    process.exit(1);
+  });
