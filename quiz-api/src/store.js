@@ -218,7 +218,11 @@ function publicQuestion(q) {
 
 function pickQuestion({ category, difficulty, userId }) {
   let pool = allQuestions();
-  if (category) pool = pool.filter((q) => q.category === String(category).toLowerCase());
+  const cat = category ? String(category).toLowerCase() : "";
+  // "general" = toutes les questions texte (culture, géographie, maths…)
+  const GENERAL = ["general", "culture", "geographie", "maths", "science", "histoire", "sport"];
+  if (cat === "general") pool = pool.filter((q) => GENERAL.includes(q.category));
+  else if (cat) pool = pool.filter((q) => q.category === cat);
   if (difficulty) pool = pool.filter((q) => q.difficulty === String(difficulty).toLowerCase());
   if (!pool.length) return null;
 
