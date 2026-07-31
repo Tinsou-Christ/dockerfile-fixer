@@ -588,7 +588,7 @@ function grantXp(userId, amount) {
 }
 
 module.exports = {
-  load, save, newId,
+  load, init, save, newId,
   allQuestions, categories, getQuestion, createQuestion, updateQuestion, deleteQuestion,
   publicQuestion, pickQuestion,
   getUser, updateUserName, allUsers, decorate, ranked, userProfile, categoryLeaderboard,
