@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quiz API — Play, Compete, Climb the Leaderboard</title>
+<meta name="description" content="Quiz API with a playable web site: categories, anime & flag quizzes, true/false, daily challenge, XP, streaks, achievements and global leaderboards." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="logo">🎯</span> Quiz API</div>
+    <nav>
+      <button data-view="home" class="active">Home</button>
+      <button data-view="play">Play</button>
+      <button data-view="leaderboard">Leaderboard</button>
+      <button data-view="profile">My profile</button>
+      <button data-view="docs">API docs</button>
+      <a class="navlink" href="/admin.html">🔐 Admin</a>
+    </nav>
+  </header>
+
+  <!-- ------------------------------- HOME ------------------------------- -->
+  <section id="view-home">
+    <div class="card">
+      <h1>Play the quiz on the web, or with the <code>quiz</code> bot command</h1>
+      <p class="lead">Same questions, same scores, same leaderboards. Answer with A/B/C/D, build a streak, earn XP and unlock achievements.</p>
+      <div class="row">
+        <input id="nickname" placeholder="Your nickname" style="max-width:240px" />
+        <button class="btn accent" id="startRandom">🎲 Random quiz</button>
+        <button class="btn ghost" id="startDaily">🌟 Daily challenge</button>
+      </div>
+      <p class="muted" style="margin-top:10px">Your nickname is your player identity for scores and the leaderboard.</p>
+    </div>
+
+    <div class="card">
+      <h2>Categories</h2>
+      <div class="grid cats" id="catGrid"></div>
+    </div>
+
+    <div class="card">
+      <h2>Global stats</h2>
+      <div class="grid stats" id="homeStats"></div>
+    </div>
+  </section>
+
+  <!-- ------------------------------- PLAY ------------------------------- -->
+  <section id="view-play" class="hide">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="badges" id="playBadges"></div>
+        <div class="row">
+          <select id="playCategory" style="width:auto"></select>
+          <select id="playDifficulty" style="width:auto">
+            <option value="">Any difficulty</option>
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+          <button class="btn small" id="nextQuestion">Next ➜</button>
+        </div>
+      </div>
+      <div class="timer"><i id="timerBar" style="width:100%"></i></div>
+      <div id="questionBox"><p class="muted">Loading question…</p></div>
+      <div id="resultBox"></div>
+      <div class="row" style="margin-top:16px">
+        <div class="stat" style="flex:1"><b id="sessionScore">0 / 0</b><small>Session score</small></div>
+        <div class="stat" style="flex:1"><b id="sessionStreak">0 🔥</b><small>Streak</small></div>
+        <div class="stat" style="flex:1"><b id="sessionXp">0 ✨</b><small>Total XP</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------------------- LEADERBOARD --------------------------- -->
+  <section id="view-leaderboard" class="hide">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">🏆 Leaderboard</h2>
+        <div class="row">
+          <select id="lbScope" style="width:auto"><option value="global">Global</option></select>
+          <select id="lbSort" style="width:auto">
+            <option value="correct">Correct answers</option>
+            <option value="accuracy">Accuracy</option>
+            <option value="streak">Best streak</option>
+            <option value="level">Level / XP</option>
+          </select>
+        </div>
+      </div>
+      <div id="lbBox" style="margin-top:14px"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn ghost small" id="lbPrev">◀ Prev</button>
+        <span class="muted" id="lbPage"></span>
+        <button class="btn ghost small" id="lbNext">Next ▶</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------ PROFILE ----------------------------- -->
+  <section id="view-profile" class="hide">
+    <div class="card" id="profileBox"></div>
+  </section>
+
+  <!-- ------------------------------- DOCS ------------------------------- -->
+  <section id="view-docs" class="hide">
+    <div class="card">
+      <h2>API endpoints</h2>
+      <p class="lead">Drop-in compatible with the GoatBot <code>quiz.js</code> command — set <code>BASE_URL</code> to <span id="baseUrl"></span>.</p>
+      <code class="endpoint">GET  /api/categories</code>
+      <code class="endpoint">GET  /api/question?category=anime&difficulty=hard&userId=123</code>
+      <code class="endpoint">POST /api/answer { userId, questionId, answer, timeSpent, userName }</code>
+      <code class="endpoint">POST /api/user/update { userId, name }</code>
+      <code class="endpoint">GET  /api/user/:userId</code>
+      <code class="endpoint">GET  /api/leaderboards?page=1&limit=8&sortBy=correct</code>
+      <code class="endpoint">GET  /api/leaderboard/category/:category?page=1&limit=10</code>
+      <code class="endpoint">GET  /api/challenge/daily?userId=123</code>
+      <h3 style="margin-top:18px">Admin (header <code>x-admin-code</code>)</h3>
+      <code class="endpoint">POST   /api/admin/login { code }</code>
+      <code class="endpoint">GET    /api/admin/stats</code>
+      <code class="endpoint">GET    /api/admin/questions?category=&search=</code>
+      <code class="endpoint">POST   /api/admin/questions { category, difficulty, question, options[], answerIndex, imageUrl }</code>
+      <code class="endpoint">POST   /api/admin/questions/bulk { questions: [...] }</code>
+      <code class="endpoint">PUT    /api/admin/questions/:id</code>
+      <code class="endpoint">DELETE /api/admin/questions/:id</code>
+      <code class="endpoint">GET    /api/admin/users?page=&limit=&search=</code>
+      <code class="endpoint">POST   /api/admin/users/:userId/ban | /reset | /xp</code>
+      <code class="endpoint">DELETE /api/admin/users/:userId</code>
+    </div>
+  </section>
+</div>
+<script src="/js/app.js"></script>
+</body>
+</html>
