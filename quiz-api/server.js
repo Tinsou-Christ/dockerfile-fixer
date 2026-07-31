@@ -47,7 +47,13 @@ app.get("/api", (req, res) => {
   });
 });
 
-app.get("/api/health", (req, res) => res.json({ status: "ok", uptime: process.uptime() }));
+app.get("/api/health", (req, res) =>
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    storage: require("./src/mongo").isEnabled() ? "mongodb" : "file",
+  }),
+);
 
 app.get("/api/categories", (req, res) => {
   res.json(store.categories());

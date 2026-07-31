@@ -10,6 +10,10 @@ services:
         value: "0709"
       - key: DATA_DIR
         value: /data
+      - key: MONGODB_URI
+        value: "mongodb+srv://Christus:voldigo225@cluster0.hphrncx.mongodb.net/?appName=Cluster"
+      - key: MONGODB_DB
+        value: quizdb
     disk:
       name: quiz-data
       mountPath: /data
