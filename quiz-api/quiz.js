@@ -132,6 +132,20 @@ module.exports = {
           return await this.handleFlagQuiz(message, event, commandName, api);
         case "anime":
           return await this.handleAnimeQuiz(message, event, commandName, api);
+        case "cartoon":
+        case "dessin":
+        case "dessins":
+        case "kids":
+          return await this.handleImageQuiz(message, event, commandName, "cartoon", "📺 𝗤𝘂𝗶𝘇 𝗗𝗲𝘀𝘀𝗶𝗻𝘀 𝗔𝗻𝗶𝗺é𝘀");
+        case "animaux":
+        case "animal":
+          return await this.handleImageQuiz(message, event, commandName, "animaux", "🐾 𝗤𝘂𝗶𝘇 𝗔𝗻𝗶𝗺𝗮𝘂𝘅");
+        case "monument":
+        case "monuments":
+          return await this.handleImageQuiz(message, event, commandName, "monument", "🏛️ 𝗤𝘂𝗶𝘇 𝗠𝗼𝗻𝘂𝗺𝗲𝗻𝘁𝘀");
+        case "sport":
+        case "sports":
+          return await this.handleImageQuiz(message, event, commandName, "sport", "⚽ 𝗤𝘂𝗶𝘇 𝗦𝗽𝗼𝗿𝘁");
         case "hard":
           return await this.handleQuiz(message, event, ["general"], commandName, getLang, api, usersData, "hard");
         case "medium":
@@ -170,7 +184,10 @@ module.exports = {
         `• quiz leaderboard - Show leaderboard\n` +
         `• quiz torf - Play True/False quiz\n` +
         `• quiz flag - Play flag guessing quiz\n` +
-        `• quiz anime - Play anime character quiz\n\n` +
+        `• quiz anime - Play anime character quiz\n` +
+        `• quiz cartoon - Dessins animés (avec images)\n` +
+        `• quiz animaux / monument / sport - Quiz photos\n` +
+        `• quiz science / histoire / cinema - Quiz culture\n\n` +
         `🎮 Use: quiz <category> to start quiz`
       );
     } catch (err) {
@@ -503,6 +520,49 @@ module.exports = {
     }
   },
 
+  async handleImageQuiz(message, event, commandName, category, title) {
+    try {
+      const res = await axios.get(`${BASE_URL}/question?category=${category}&userId=${event.senderID}`, { timeout: 25000 });
+      const { _id, question, options, answer, imageUrl, hint } = res.data;
+      if (!Array.isArray(options) || !options.length) {
+        return message.reply(`⚠️ Aucune question « ${category} » disponible pour le moment.`);
+      }
+
+      const body = `${title}\n━━━━━━━━\n\n❔ ${hint || question}\n\n` +
+        options.map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt}`).join("\n") +
+        `\n\n⏰ 30 secondes pour répondre (A/B/C/D)`;
+
+      const picture = imageUrl ? await this.safeStream(imageUrl) : null;
+      const info = await message.reply(picture ? { body, attachment: picture } : body);
+
+      global.GoatBot.onReply.set(info.messageID, {
+        commandName,
+        author: event.senderID,
+        messageID: info.messageID,
+        answer,
+        options,
+        questionId: _id,
+        startTime: Date.now(),
+        isImage: true,
+        category,
+        reward: this.envConfig.imageReward || 12000
+      });
+
+      setTimeout(() => {
+        const r = global.GoatBot.onReply.get(info.messageID);
+        if (r) {
+          message.reply(`⏰ Temps écoulé ! La bonne réponse était : ${answer}`);
+          message.unsend(info.messageID);
+          global.GoatBot.onReply.delete(info.messageID);
+        }
+      }, 30000);
+    } catch (err) {
+      console.error("Image quiz error:", err?.response?.data || err);
+      const detail = err?.response?.data?.error || err.message || "unknown error";
+      return message.reply(`⚠️ Could not create ${category} quiz.\n📄 Reason: ${detail}`);
+    }
+  },
+
   async handleQuiz(message, event, args, commandName, getLang, api, usersData, forcedDifficulty = null) {
     try {
       const userName = await this.getUserName(api, event.senderID);
@@ -525,24 +585,29 @@ module.exports = {
       }
 
       const res = await axios.get(`${BASE_URL}/question`, { params: queryParams });
-      const { _id, question, options, answer, category: qCategory, difficulty } = res.data;
+      const { _id, question, options, answer, category: qCategory, difficulty, imageUrl, hint } = res.data;
 
       const optText = options.map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt}`).join("\n");
 
-      const info = await message.reply(getLang("reply")
+      const body = getLang("reply")
         .replace("{category}", qCategory?.charAt(0).toUpperCase() + qCategory?.slice(1) || "Random")
         .replace("{difficulty}", difficulty?.charAt(0).toUpperCase() + difficulty?.slice(1) || "Medium")
-        .replace("{question}", question)
-        .replace("{options}", optText));
+        .replace("{question}", imageUrl ? (hint || question) : question)
+        .replace("{options}", optText);
+
+      const picture = imageUrl ? await this.safeStream(imageUrl) : null;
+      const info = await message.reply(picture ? { body, attachment: picture } : body);
 
       global.GoatBot.onReply.set(info.messageID, {
         commandName,
         author: event.senderID,
         messageID: info.messageID,
         answer,
+        options,
         questionId: _id,
         startTime: Date.now(),
         difficulty,
+        isImage: !!imageUrl,
         category: qCategory
       });
 
@@ -714,7 +779,7 @@ module.exports = {
       let correctAnswer = Reply.answer;
       let userAnswer = ans;
 
-      if ((Reply.isFlag || Reply.isAnime) && Reply.options) {
+      if ((Reply.isFlag || Reply.isAnime || Reply.isImage) && Reply.options) {
         const optionIndex = ans.charCodeAt(0) - 65;
         if (optionIndex >= 0 && optionIndex < Reply.options.length) {
           userAnswer = Reply.options[optionIndex];
