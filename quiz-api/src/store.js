@@ -201,7 +201,7 @@ function deleteQuestion(id) {
 function publicQuestion(q) {
   const letter = String.fromCharCode(65 + q.answerIndex);
   const text = q.options[q.answerIndex];
-  const usesText = q.category === "flag" || q.category === "anime";
+  const usesText = q.category === "flag" || q.category === "anime" || !!q.imageUrl;
   return {
     _id: q._id,
     category: q.category,
@@ -218,9 +218,17 @@ function publicQuestion(q) {
 
 function pickQuestion({ category, difficulty, userId }) {
   let pool = allQuestions();
-  const cat = category ? String(category).toLowerCase() : "";
+  let cat = category ? String(category).toLowerCase() : "";
+  const ALIASES = {
+    dessin: "cartoon", dessins: "cartoon", "dessin-anime": "cartoon", kids: "cartoon", enfant: "cartoon",
+    animal: "animaux", animals: "animaux", nature: "animaux",
+    monuments: "monument", lieux: "monument",
+    film: "cinema", films: "cinema", movie: "cinema",
+    history: "histoire", sciences: "science", sports: "sport",
+  };
+  if (ALIASES[cat]) cat = ALIASES[cat];
   // "general" = toutes les questions texte (culture, géographie, maths…)
-  const GENERAL = ["general", "culture", "geographie", "maths", "science", "histoire", "sport"];
+  const GENERAL = ["general", "culture", "geographie", "maths", "science", "histoire", "sport", "cinema"];
   if (cat === "general") pool = pool.filter((q) => GENERAL.includes(q.category));
   else if (cat) pool = pool.filter((q) => q.category === cat);
   if (difficulty) pool = pool.filter((q) => q.difficulty === String(difficulty).toLowerCase());
