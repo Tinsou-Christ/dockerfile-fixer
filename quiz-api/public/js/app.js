@@ -112,7 +112,8 @@ async function loadCategories() {
 function icon(cat) {
   return {
     anime: "🎌", flag: "🏁", torf: "⚖️", general: "🧠", science: "🔬",
-    history: "🏛️", geography: "🌍", sports: "⚽", music: "🎵", movies: "🎬",
+    cartoon: "📺", animaux: "🐾", monument: "🏛️", cinema: "🎬", histoire: "📜",
+    histoire_: "🏛️", geographie: "🌍", sport: "⚽", maths: "➗", culture: "🎓",
   }[cat] || "📚";
 }
 
