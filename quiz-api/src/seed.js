@@ -8,7 +8,7 @@ const RAW = require("./questions.fr.json");
 
 // Bump this when questions.fr.json changes: the store replaces the previous
 // seeded questions (admin-created ones are kept).
-const SEED_VERSION = "fr-2026-08-01-v2";
+const SEED_VERSION = "fr-2026-08-08-v3";
 
 function idFromKey(key, i) {
   return (String(key || "") + i.toString(16)).replace(/[^0-9a-f]/g, "0").slice(0, 24).padEnd(24, "0");
