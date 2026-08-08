@@ -49,26 +49,39 @@ function syncSeed(target) {
   return true;
 }
 
+/* ----------------------------- dirty tracking ----------------------------- */
+const dirtyUsers = new Set();
+let questionsDirty = false;
+let dailyDirty = false;
+
+/** Mark a player as modified so it gets persisted on the next flush. */
+function touch(userId) {
+  if (userId != null) dirtyUsers.add(String(userId));
+  save();
+}
+
 /**
  * Connect to MongoDB (when MONGODB_URI is set) and use it as the source of
- * truth. Must be awaited before the HTTP server starts serving traffic.
+ * truth for players / custom questions / daily challenge.
+ * The seeded question pack always comes from questions.fr.json.
  */
 async function init() {
   await mongo.connect();
 
   if (mongo.isEnabled()) {
-    const remote = await mongo.loadState();
+    db = JSON.parse(JSON.stringify(DEFAULT_DB));
+    const remote = await mongo.loadAll();
     if (remote) {
-      db = remote;
-      for (const k of Object.keys(DEFAULT_DB)) if (db[k] === undefined) db[k] = DEFAULT_DB[k];
+      db.users = remote.users || {};
+      db.daily = remote.daily || {};
+      db.questions = [...seedQuestions(), ...(remote.questions || []).filter((q) => !q.seed)];
+      db.meta.seeded = true;
+      db.meta.seedVersion = SEED_VERSION;
       console.log(
-        `[store] loaded from MongoDB: ${db.questions.length} questions, ${Object.keys(db.users).length} players`,
+        `[store] MongoDB ready: ${db.questions.length} questions, ${Object.keys(db.users).length} players`,
       );
-      if (syncSeed(db)) await mongo.saveState(db);
     } else {
-      load(); // seeds if empty
-      await mongo.saveState(db);
-      console.log("[store] MongoDB was empty — initial state uploaded");
+      syncSeed(db);
     }
     return db;
   }
@@ -88,9 +101,27 @@ function save(immediate = false) {
   }, 400);
 }
 
+function flushMongo() {
+  const promises = [];
+  if (dirtyUsers.size) {
+    const users = [...dirtyUsers].map((id) => db.users[id]).filter(Boolean);
+    dirtyUsers.clear();
+    if (users.length) promises.push(mongo.saveUsers(users));
+  }
+  if (questionsDirty) {
+    questionsDirty = false;
+    promises.push(mongo.saveQuestions(db.questions.filter((q) => !q.seed)));
+  }
+  if (dailyDirty) {
+    dailyDirty = false;
+    promises.push(mongo.saveDaily(db.daily || {}));
+  }
+  return Promise.all(promises);
+}
+
 function writeNow() {
   if (mongo.isEnabled()) {
-    mongo.saveState(db).catch((err) => console.error("[mongo] async save failed:", err.message));
+    flushMongo().catch((err) => console.error("[mongo] async save failed:", err.message));
     return;
   }
   try {
@@ -102,6 +133,17 @@ function writeNow() {
     console.error("DB save failed:", err.message);
   }
 }
+
+/** Awaitable flush — used by serverless handlers before the response ends. */
+async function flush() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (mongo.isEnabled()) return flushMongo();
+  writeNow();
+}
+
 
 
 function newId() {
