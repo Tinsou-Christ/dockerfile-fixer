@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "installCommand": "cd quiz-api && npm install --omit=dev",
+  "buildCommand": "",
+  "outputDirectory": "quiz-api/public",
+  "builds": [
+    {
+      "src": "quiz-api/api/index.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "quiz-api/server.js",
+          "quiz-api/src/**",
+          "quiz-api/public/**"
+        ]
+      }
+    }
+  ],
+  "routes": [{ "src": "/(.*)", "dest": "quiz-api/api/index.js" }],
+  "env": {
+    "DATA_DIR": "/tmp"
+  }
+}
