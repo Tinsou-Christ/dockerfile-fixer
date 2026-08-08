@@ -49,26 +49,39 @@ function syncSeed(target) {
   return true;
 }
 
+/* ----------------------------- dirty tracking ----------------------------- */
+const dirtyUsers = new Set();
+let questionsDirty = false;
+let dailyDirty = false;
+
+/** Mark a player as modified so it gets persisted on the next flush. */
+function touch(userId) {
+  if (userId != null) dirtyUsers.add(String(userId));
+  save();
+}
+
 /**
  * Connect to MongoDB (when MONGODB_URI is set) and use it as the source of
- * truth. Must be awaited before the HTTP server starts serving traffic.
+ * truth for players / custom questions / daily challenge.
+ * The seeded question pack always comes from questions.fr.json.
  */
 async function init() {
   await mongo.connect();
 
   if (mongo.isEnabled()) {
-    const remote = await mongo.loadState();
+    db = JSON.parse(JSON.stringify(DEFAULT_DB));
+    const remote = await mongo.loadAll();
     if (remote) {
-      db = remote;
-      for (const k of Object.keys(DEFAULT_DB)) if (db[k] === undefined) db[k] = DEFAULT_DB[k];
+      db.users = remote.users || {};
+      db.daily = remote.daily || {};
+      db.questions = [...seedQuestions(), ...(remote.questions || []).filter((q) => !q.seed)];
+      db.meta.seeded = true;
+      db.meta.seedVersion = SEED_VERSION;
       console.log(
-        `[store] loaded from MongoDB: ${db.questions.length} questions, ${Object.keys(db.users).length} players`,
+        `[store] MongoDB ready: ${db.questions.length} questions, ${Object.keys(db.users).length} players`,
       );
-      if (syncSeed(db)) await mongo.saveState(db);
     } else {
-      load(); // seeds if empty
-      await mongo.saveState(db);
-      console.log("[store] MongoDB was empty — initial state uploaded");
+      syncSeed(db);
     }
     return db;
   }
@@ -88,9 +101,27 @@ function save(immediate = false) {
   }, 400);
 }
 
+function flushMongo() {
+  const promises = [];
+  if (dirtyUsers.size) {
+    const users = [...dirtyUsers].map((id) => db.users[id]).filter(Boolean);
+    dirtyUsers.clear();
+    if (users.length) promises.push(mongo.saveUsers(users));
+  }
+  if (questionsDirty) {
+    questionsDirty = false;
+    promises.push(mongo.saveQuestions(db.questions.filter((q) => !q.seed)));
+  }
+  if (dailyDirty) {
+    dailyDirty = false;
+    promises.push(mongo.saveDaily(db.daily || {}));
+  }
+  return Promise.all(promises);
+}
+
 function writeNow() {
   if (mongo.isEnabled()) {
-    mongo.saveState(db).catch((err) => console.error("[mongo] async save failed:", err.message));
+    flushMongo().catch((err) => console.error("[mongo] async save failed:", err.message));
     return;
   }
   try {
@@ -102,6 +133,17 @@ function writeNow() {
     console.error("DB save failed:", err.message);
   }
 }
+
+/** Awaitable flush — used by serverless handlers before the response ends. */
+async function flush() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (mongo.isEnabled()) return flushMongo();
+  writeNow();
+}
+
 
 
 function newId() {
@@ -171,6 +213,7 @@ function normalizeQuestion(input, existing = null) {
 function createQuestion(input) {
   const q = normalizeQuestion(input);
   load().questions.push(q);
+  questionsDirty = true;
   save();
   return q;
 }
@@ -180,6 +223,7 @@ function updateQuestion(id, input) {
   const idx = list.findIndex((q) => q._id === id);
   if (idx === -1) return null;
   list[idx] = normalizeQuestion(input, list[idx]);
+  questionsDirty = true;
   save();
   return list[idx];
 }
@@ -189,6 +233,7 @@ function deleteQuestion(id) {
   const idx = list.findIndex((q) => q._id === id);
   if (idx === -1) return false;
   list.splice(idx, 1);
+  questionsDirty = true;
   save();
   return true;
 }
@@ -245,10 +290,9 @@ function pickQuestion({ category, difficulty, userId }) {
   if (userId) {
     const user = getUser(userId);
     user.recent = [q._id, ...(user.recent || [])].slice(0, 30);
-    save();
+    touch(userId);
   }
   q.stats.asked = (q.stats.asked || 0) + 1;
-  save();
   return q;
 }
 
@@ -318,7 +362,7 @@ function getUser(userId, { create = true } = {}) {
   if (!store.users[id]) {
     if (!create) return null;
     store.users[id] = blankUser(id);
-    save();
+    touch(id);
   }
   return store.users[id];
 }
@@ -326,7 +370,7 @@ function getUser(userId, { create = true } = {}) {
 function updateUserName(userId, name) {
   const user = getUser(userId);
   if (name && String(name).trim()) user.name = String(name).trim().slice(0, 60);
-  save();
+  touch(userId);
   return user;
 }
 
@@ -502,7 +546,7 @@ function submitAnswer({ userId, questionId, answer, timeSpent, userName }) {
     }
   }
 
-  save();
+  touch(user.userId);
 
   const profile = userProfile(user.userId);
   return {
@@ -526,6 +570,7 @@ function dailyChallenge(userId) {
   if (!store.daily || store.daily.date !== today) {
     const pick = questions[Math.floor(Math.random() * questions.length)];
     store.daily = { date: today, questionId: pick._id };
+    dailyDirty = true;
     save();
   }
   let question = getQuestion(store.daily.questionId) || questions[0];
@@ -537,7 +582,7 @@ function dailyChallenge(userId) {
     if (user.lastDaily !== today) {
       user.dailyStreak = user.lastDaily === yesterday ? (user.dailyStreak || 0) + 1 : 1;
       user.lastDaily = today;
-      save();
+      touch(userId);
     }
     streak = user.dailyStreak || 1;
   }
@@ -579,7 +624,7 @@ function setBanned(userId, banned) {
   const user = getUser(userId, { create: false });
   if (!user) return null;
   user.banned = !!banned;
-  save();
+  touch(userId);
   return decorate(user);
 }
 
@@ -589,7 +634,7 @@ function resetUser(userId) {
   if (!store.users[id]) return null;
   const { name, createdAt } = store.users[id];
   store.users[id] = { ...blankUser(id, name), createdAt };
-  save();
+  touch(id);
   return decorate(store.users[id]);
 }
 
@@ -598,7 +643,9 @@ function deleteUser(userId) {
   const id = String(userId);
   if (!store.users[id]) return false;
   delete store.users[id];
-  save();
+  dirtyUsers.delete(id);
+  if (mongo.isEnabled()) mongo.deleteUser(id).catch(() => {});
+  else save();
   return true;
 }
 
@@ -606,12 +653,12 @@ function grantXp(userId, amount) {
   const user = getUser(userId, { create: false });
   if (!user) return null;
   user.totalXp = Math.max(0, (user.totalXp || 0) + Number(amount || 0));
-  save();
+  touch(userId);
   return decorate(user);
 }
 
 module.exports = {
-  load, init, save, newId,
+  load, init, save, flush, touch, newId,
   allQuestions, categories, getQuestion, createQuestion, updateQuestion, deleteQuestion,
   publicQuestion, pickQuestion,
   getUser, updateUserName, allUsers, decorate, ranked, userProfile, categoryLeaderboard,

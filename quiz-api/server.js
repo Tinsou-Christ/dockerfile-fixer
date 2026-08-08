@@ -13,6 +13,30 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
 
+/* --------------------------- storage readiness --------------------------- */
+// Works both for long-running servers (Render/Docker) and serverless (Vercel):
+// every request waits for the store to be initialised once.
+let readyPromise = null;
+function ready() {
+  if (!readyPromise) readyPromise = store.init().catch((err) => {
+    console.error("Store init failed:", err);
+    readyPromise = null;
+    throw err;
+  });
+  return readyPromise;
+}
+
+app.use(async (req, res, next) => {
+  try {
+    await ready();
+    // On serverless, flush pending writes before the response is finalised.
+    if (process.env.VERCEL) res.on("finish", () => store.flush().catch(() => {}));
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 /* ------------------------------ admin guard ------------------------------ */
 
 function requireAdmin(req, res, next) {
@@ -256,14 +280,17 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || "Internal server error" });
 });
 
-store
-  .init()
-  .then(() => {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Quiz API listening on http://0.0.0.0:${PORT}`);
+if (!process.env.VERCEL) {
+  ready()
+    .then(() => {
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Quiz API listening on http://0.0.0.0:${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error("Startup failed:", err);
+      process.exit(1);
     });
-  })
-  .catch((err) => {
-    console.error("Startup failed:", err);
-    process.exit(1);
-  });
+}
+
+module.exports = app;
